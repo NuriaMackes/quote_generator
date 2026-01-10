@@ -133,13 +133,7 @@
             lastQuoteIndex = randomIndex;
             const quote = quotes[randomIndex];
             
-            // Quotation marks nur hinzufügen, wenn nicht bereits vorhanden
-            let displayQuote = quote;
-            if (!quote.startsWith('"') && !quote.startsWith("'")) {
-                displayQuote = `"${quote}"`;
-            }
-            
-            document.getElementById('quoteText').textContent = displayQuote;
+            document.getElementById('quoteText').textContent = quote;
         }
 
         // Load a quote on page load
