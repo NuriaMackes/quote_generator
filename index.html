@@ -107,6 +107,18 @@
     </div>
 
     <script>
+        // Passwort-Schutz
+        function protectPage() {
+            const password = prompt("🔐 Bitte Passwort eingeben:");
+            if (password !== "0815") {
+                document.body.innerHTML = "";
+                alert("❌ Falsches Passwort!");
+                return false;
+            }
+        }
+
+        window.addEventListener('load', protectPage);
+
         const quotes = [
             "Dude, you're a bit chill.. the wedding starts in 10 minutes!",
             "And here is our butterfly collection.",
@@ -136,8 +148,8 @@
             document.getElementById('quoteText').textContent = quote;
         }
 
-        // Load a quote on page load
-        window.addEventListener('load', getQuote);
+        // Load a quote after password check
+        setTimeout(getQuote, 100);
     </script>
 </body>
 </html>
