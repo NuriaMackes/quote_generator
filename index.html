@@ -41,6 +41,49 @@
             margin-bottom: 30px;
             font-weight: 600;
         }
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urlaubszitate Kolumbien</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            background-image: url("data:image/svg+xml,%3Csvg width='280' height='280' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='10' y='50' font-size='30'%3E🦜%3C/text%3E%3Ctext x='100' y='80' font-size='30'%3E🇨🇴%3C/text%3E%3Ctext x='190' y='40' font-size='30'%3E☕%3C/text%3E%3Ctext x='30' y='140' font-size='30'%3E🏔️%3C/text%3E%3Ctext x='120' y='160' font-size='30'%3E🌴%3C/text%3E%3Ctext x='210' y='120' font-size='30'%3E🦋%3C/text%3E%3Ctext x='50' y='220' font-size='30'%3E🇨🇴%3C/text%3E%3Ctext x='150' y='250' font-size='30'%3E🦜%3C/text%3E%3Ctext x='240' y='190' font-size='30'%3E☕%3C/text%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 280px 280px;
+            background-position: 0 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
 
         .quote-text {
             font-size: 22px;
@@ -107,43 +150,75 @@
     </div>
 
     <script>
-        // Lokale Textdatei im Repo (relative Pfad). Leerzeichen werden mit encodeURI gehandhabt.
-        const LOCAL_FILE = encodeURI('./Zitate aus dem Urlaub.txt');
+        // Verschlüsselte Datei im Repo (erstellt mit encrypt.js)
+        const ENC_FILE = 'zitate.enc.json';
         let quotes = [];
         let lastQuoteIndex = -1;
 
-        // Passwort-Schutz
-        function protectPage() {
+        // Passwort abfragen und Datei laden/entschlüsseln
+        async function protectPage() {
             const password = prompt("🔐 Bitte Passwort eingeben:");
-            if (password !== "0815") {
+            if (!password) {
                 document.body.innerHTML = "";
-                alert("❌ Falsches Passwort!");
-                return false;
+                return;
             }
-            loadQuotes();
+
+            try {
+                await loadAndDecrypt(password);
+                document.getElementById('quoteText').textContent = "Klick auf Mehr!";
+                getQuote();
+            } catch (err) {
+                console.error('Entschlüsselungsfehler', err);
+                document.getElementById('quoteText').textContent = '⚠️ Entschlüsselungsfehler oder falsches Passwort.';
+                document.body.insertAdjacentHTML('beforeend', '<p style="color:#c33">Passwort falsch oder Datei nicht vorhanden.</p>');
+                const btn = document.querySelector('.btn');
+                if (btn) btn.disabled = true;
+            }
         }
 
-        // Lokale Textdatei laden und parsen (jede Zeile = ein Zitat)
-        async function loadQuotes() {
-            try {
-                const response = await fetch(LOCAL_FILE);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        async function loadAndDecrypt(password) {
+            const resp = await fetch(ENC_FILE);
+            if (!resp.ok) throw new Error('Encrypted file not found');
+            const obj = await resp.json();
 
-                const txt = await response.text();
+            const salt = base64ToArrayBuffer(obj.salt);
+            const iv = base64ToArrayBuffer(obj.iv);
+            const tag = base64ToArrayBuffer(obj.tag);
+            const ct = base64ToArrayBuffer(obj.ciphertext);
 
-                // Jede non-empty Zeile ist ein Zitat
-                quotes = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            const iterations = obj.meta?.iterations || 200000;
 
-                if (quotes.length > 0) {
-                    document.getElementById('quoteText').textContent = "Klick auf Mehr!";
-                    getQuote();
-                } else {
-                    throw new Error("Keine Zitate in der lokalen Datei gefunden");
-                }
-            } catch (error) {
-                console.error("Fehler beim Laden (lokal):", error);
-                document.getElementById('quoteText').textContent = "⚠️ Lokal laden fehlgeschlagen: " + error.message;
+            // PBKDF2 derive
+            const pwUtf8 = new TextEncoder().encode(password);
+            const baseKey = await crypto.subtle.importKey('raw', pwUtf8, 'PBKDF2', false, ['deriveKey']);
+            const derivedKey = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: salt, iterations: iterations, hash: 'SHA-256' },
+                baseKey,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
+
+            // AES-GCM expects ciphertext with tag appended
+            const ctArr = new Uint8Array(ct.byteLength + tag.byteLength);
+            ctArr.set(new Uint8Array(ct), 0);
+            ctArr.set(new Uint8Array(tag), ct.byteLength);
+
+            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(iv) }, derivedKey, ctArr.buffer);
+            const plainText = new TextDecoder().decode(plainBuf);
+
+            quotes = plainText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            if (!quotes.length) throw new Error('Leere Zitatliste nach Entschlüsselung');
+        }
+
+        function base64ToArrayBuffer(b64) {
+            const binary = atob(b64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
             }
+            return bytes.buffer;
         }
 
         function getQuote() {
@@ -155,12 +230,9 @@
             } while (randomIndex === lastQuoteIndex && quotes.length > 1);
 
             lastQuoteIndex = randomIndex;
-            const quote = quotes[randomIndex];
-
-            document.getElementById('quoteText').textContent = quote;
+            document.getElementById('quoteText').textContent = quotes[randomIndex];
         }
 
-        // Passwort-Check beim Laden
         window.addEventListener('load', protectPage);
     </script>
 </body>
